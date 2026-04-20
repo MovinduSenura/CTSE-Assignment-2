@@ -1,0 +1,59 @@
+from hypothesis import given, strategies as st
+
+from Member_1_Planner.validation_tool import PlannerTaskContext, create_trip_tasks, validate_and_structure_trip_request
+
+
+@given(
+    destination=st.text(
+        alphabet=st.characters(whitelist_categories=("Lu", "Ll", "Zs")),
+        min_size=1,
+        max_size=20,
+    ).map(str.strip).filter(bool),
+    budget=st.floats(min_value=1, max_value=100000, allow_nan=False, allow_infinity=False),
+    days=st.integers(min_value=1, max_value=14),
+    interests=st.lists(
+        st.sampled_from(["culture", "food", "anime", "history", "nature", "shopping"]),
+        min_size=0,
+        max_size=8,
+    ),
+)
+def test_validation_properties(destination: str, budget: float, days: int, interests: list[str]) -> None:
+    result = validate_and_structure_trip_request(
+        destination=destination,
+        budget=budget,
+        days=days,
+        interests=interests,
+    )
+    assert result.normalized_destination
+    assert result.budget_tier in {"low", "medium", "high"}
+    assert result.daily_trip_pacing in {"relaxed", "balanced", "packed"}
+    assert len(result.normalized_interests) >= 1
+    assert len(result.normalized_interests) == len(set(result.normalized_interests))
+
+
+@given(
+    days=st.integers(min_value=1, max_value=14),
+    budget_tier=st.sampled_from(["low", "medium", "high"]),
+    pacing=st.sampled_from(["relaxed", "balanced", "packed"]),
+    warnings=st.lists(st.text(min_size=1, max_size=60), min_size=0, max_size=3),
+)
+def test_task_generation_properties(
+    days: int,
+    budget_tier: str,
+    pacing: str,
+    warnings: list[str],
+) -> None:
+    tasks = create_trip_tasks(
+        PlannerTaskContext(
+            normalized_destination="Kandy",
+            normalized_interests=["culture", "food"],
+            days=days,
+            budget_tier=budget_tier,  # type: ignore[arg-type]
+            daily_trip_pacing=pacing,  # type: ignore[arg-type]
+            warnings=warnings,
+        )
+    )
+    assert len(tasks) >= 3
+    assert any(task.startswith("Researcher:") for task in tasks)
+    assert any(task.startswith("Executor:") for task in tasks)
+    assert any(task.startswith("Reviewer:") for task in tasks)

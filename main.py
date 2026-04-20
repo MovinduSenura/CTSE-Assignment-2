@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 from typing import TypedDict
@@ -11,6 +12,7 @@ from uuid import uuid4
 from langchain_ollama import ChatOllama
 from langgraph.graph import END, START, StateGraph
 
+from Member_1_Planner.validation_tool import parse_trip_request
 from Member_1_Planner.planner_agent import run_planner_agent
 from Member_2_Researcher.research_agent import run_research_agent
 from Member_3_Executor.executor_agent import run_executor_agent
@@ -93,12 +95,40 @@ def run_system(
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description="Run the AI Travel Planner.")
-    parser.add_argument("--destination", required=True, help="Trip destination, for example 'Tokyo'")
-    parser.add_argument("--budget", required=True, type=float, help="Maximum trip budget")
-    parser.add_argument("--days", required=True, type=int, help="Number of trip days")
+    parser.add_argument("--request", help="Natural-language request, for example 'Plan a 2-day trip to Kandy under 30000 for culture and food'")
+    parser.add_argument("--destination", help="Trip destination, for example 'Tokyo'")
+    parser.add_argument("--budget", type=float, help="Maximum trip budget")
+    parser.add_argument("--days", type=int, help="Number of trip days")
     parser.add_argument("--currency", default="USD", help="Budget currency")
-    parser.add_argument("--interests", nargs="+", required=True, help="Interests, for example culture food anime")
+    parser.add_argument("--interests", nargs="+", help="Interests, for example culture food anime")
+    parser.add_argument("--show-planner-details", action="store_true", help="Print planner output for demos and evaluation")
     return parser.parse_args()
+
+
+def resolve_user_input(args: argparse.Namespace) -> dict:
+    """Resolve CLI arguments into a single structured input object."""
+    if args.request:
+        return parse_trip_request(args.request).model_dump()
+
+    missing = [
+        name
+        for name, value in {
+            "destination": args.destination,
+            "budget": args.budget,
+            "days": args.days,
+            "interests": args.interests,
+        }.items()
+        if value is None
+    ]
+    if missing:
+        raise ValueError(f"Missing required inputs: {', '.join(missing)}")
+
+    return {
+        "destination": args.destination,
+        "budget": args.budget,
+        "days": args.days,
+        "interests": args.interests,
+    }
 
 
 def main() -> None:
@@ -106,13 +136,19 @@ def main() -> None:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     args = parse_args()
+    structured_input = resolve_user_input(args)
+    print("\n=== STRUCTURED INPUT ===\n")
+    print(json.dumps(structured_input, indent=4))
     final_state = run_system(
-        destination=args.destination,
-        budget=args.budget,
-        days=args.days,
-        interests=args.interests,
+        destination=structured_input["destination"],
+        budget=structured_input["budget"],
+        days=structured_input["days"],
+        interests=structured_input["interests"],
         currency=args.currency,
     )
+    if args.show_planner_details:
+        print("\n=== PLANNER OUTPUT ===\n")
+        print(json.dumps(final_state["planner_output"], indent=4))
     print("\n=== FINAL TRAVEL PLAN ===\n")
     print(final_state["reviewer_output"]["final_itinerary"])
     print("\nExecution log: logs/execution.log")

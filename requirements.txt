@@ -1,0 +1,7 @@
+langgraph
+langchain-ollama
+pydantic>=2.7
+python-dotenv
+requests
+pytest
+

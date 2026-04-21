@@ -143,13 +143,19 @@ def main() -> None:
     structured_input = resolve_user_input(args)
     print("\n=== STRUCTURED INPUT ===\n")
     print(json.dumps(structured_input, indent=4))
-    final_state = run_system(
-        destination=structured_input["destination"],
-        budget=structured_input["budget"],
-        days=structured_input["days"],
-        interests=structured_input["interests"],
-        currency=structured_input.get("currency", args.currency),
-    )
+    try:
+        final_state = run_system(
+            destination=structured_input["destination"],
+            budget=structured_input["budget"],
+            days=structured_input["days"],
+            interests=structured_input["interests"],
+            currency=structured_input.get("currency", args.currency),
+        )
+    except ValueError as exc:
+        print("\n=== ERROR ===\n")
+        print(str(exc))
+        print("\nExecution log: logs/execution.log")
+        raise SystemExit(1) from exc
     if args.show_planner_details:
         print("\n=== PLANNER OUTPUT ===\n")
         print(json.dumps(final_state["planner_output"], indent=4))

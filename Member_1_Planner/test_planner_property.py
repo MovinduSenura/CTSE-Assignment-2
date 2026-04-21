@@ -1,6 +1,18 @@
 from hypothesis import given, strategies as st
 
+import Member_1_Planner.validation_tool as planner_validation_tool
 from Member_1_Planner.validation_tool import PlannerTaskContext, create_trip_tasks, validate_and_structure_trip_request
+from Member_2_Researcher.attraction_tool import DestinationContext
+
+
+def _allow_sri_lanka_destination(destination: str, timeout: int = 10) -> DestinationContext:
+    return DestinationContext(
+        destination=destination.strip(),
+        display_name=f"{destination.strip()}, Sri Lanka",
+        latitude=7.2906,
+        longitude=80.6337,
+        country="Sri Lanka",
+    )
 
 
 @given(
@@ -18,12 +30,17 @@ from Member_1_Planner.validation_tool import PlannerTaskContext, create_trip_tas
     ),
 )
 def test_validation_properties(destination: str, budget: float, days: int, interests: list[str]) -> None:
-    result = validate_and_structure_trip_request(
-        destination=destination,
-        budget=budget,
-        days=days,
-        interests=interests,
-    )
+    original_resolve_destination = planner_validation_tool.resolve_destination
+    planner_validation_tool.resolve_destination = _allow_sri_lanka_destination
+    try:
+        result = validate_and_structure_trip_request(
+            destination=destination,
+            budget=budget,
+            days=days,
+            interests=interests,
+        )
+    finally:
+        planner_validation_tool.resolve_destination = original_resolve_destination
     assert result.normalized_destination
     assert result.budget_tier in {"low", "medium", "high"}
     assert result.daily_trip_pacing in {"relaxed", "balanced", "packed"}

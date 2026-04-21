@@ -33,7 +33,7 @@ def run_planner_agent(state: dict, llm, logger: logging.Logger) -> dict:
         budget=state["budget"],
         days=state["days"],
         interests=state["interests"],
-        currency=state.get("currency", "USD"),
+        currency=state.get("currency", "LKR"),
     )
     task_context = PlannerTaskContext(
         normalized_destination=validation_output.normalized_destination,

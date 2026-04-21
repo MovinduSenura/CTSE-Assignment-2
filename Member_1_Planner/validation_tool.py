@@ -14,6 +14,7 @@ class PlannerRequestInput(BaseModel):
     destination: str
     days: int = Field(gt=0)
     budget: float = Field(gt=0)
+    currency: str = "LKR"
     interests: list[str]
 
 
@@ -21,6 +22,7 @@ class PlannerValidationResult(BaseModel):
     """Structured output returned by the planner validation tool."""
 
     normalized_destination: str
+    currency: str
     normalized_interests: list[str]
     budget_tier: Literal["low", "medium", "high"]
     daily_trip_pacing: Literal["relaxed", "balanced", "packed"]
@@ -60,7 +62,7 @@ def parse_trip_request(request: str) -> PlannerRequestInput:
     days = int(next(group for group in days_match.groups() if group))
 
     destination_match = re.search(
-        r"(?:trip|travel)\s+to\s+([A-Za-z\s]+?)(?:\s+under\s+\d+|\s+for\s+.+|$)",
+        r"(?:trip|travel)\s+to\s+([A-Za-z\s]+?)(?:\s+under\s+(?:[A-Za-z]{2,4}\s+|Rs\.?\s*)?\d+|\s+for\s+.+|$)",
         cleaned_request,
         flags=re.IGNORECASE,
     )
@@ -68,10 +70,16 @@ def parse_trip_request(request: str) -> PlannerRequestInput:
         raise ValueError("Could not find the destination in the request.")
     destination = destination_match.group(1).strip()
 
-    budget_match = re.search(r"under\s+(\d+(?:\.\d+)?)", cleaned_request, flags=re.IGNORECASE)
+    budget_match = re.search(
+        r"under\s+(?:(LKR|USD|EUR|GBP|Rs\.?)\s*)?(\d+(?:\.\d+)?)",
+        cleaned_request,
+        flags=re.IGNORECASE,
+    )
     if not budget_match:
         raise ValueError("Could not find the budget in the request.")
-    budget = float(budget_match.group(1))
+    raw_currency = budget_match.group(1) or "LKR"
+    currency = _normalize_currency(raw_currency)
+    budget = float(budget_match.group(2))
 
     interests_match = re.search(r"\sfor\s+(.+)$", cleaned_request, flags=re.IGNORECASE)
     interests_text = interests_match.group(1).strip() if interests_match else ""
@@ -81,6 +89,7 @@ def parse_trip_request(request: str) -> PlannerRequestInput:
         destination=destination,
         days=days,
         budget=budget,
+        currency=currency,
         interests=interests,
     )
 
@@ -123,6 +132,7 @@ def validate_and_structure_trip_request(
     budget: float,
     days: int,
     interests: list[str],
+    currency: str = "LKR",
 ) -> PlannerValidationResult:
     """Validate and normalize the user request for downstream agents.
 
@@ -131,6 +141,7 @@ def validate_and_structure_trip_request(
         budget: Total user budget for the trip.
         days: Number of days in the trip.
         interests: User interests that should guide itinerary creation.
+        currency: Currency code used for the budget.
 
     Returns:
         A strictly structured planning payload for the Planner Agent.
@@ -149,13 +160,15 @@ def validate_and_structure_trip_request(
         raise ValueError("Days must be 14 or fewer for this project scope.")
 
     normalized_interests = _normalize_interests(interests)
-    budget_tier = _classify_budget_tier(budget, days)
+    normalized_currency = currency.strip().upper() or "LKR"
+    budget_tier = _classify_budget_tier(budget, days, normalized_currency)
     daily_trip_pacing = _classify_trip_pacing(days, len(normalized_interests))
     warnings = _build_warnings(normalized_destination, budget, days, normalized_interests, budget_tier, daily_trip_pacing)
     planning_constraints = _build_constraints(budget_tier, daily_trip_pacing, days, normalized_interests)
 
     return PlannerValidationResult(
         normalized_destination=normalized_destination,
+        currency=normalized_currency,
         normalized_interests=normalized_interests,
         budget_tier=budget_tier,
         daily_trip_pacing=daily_trip_pacing,
@@ -171,6 +184,14 @@ def _split_interests(interests_text: str) -> list[str]:
     return interests or ["general sightseeing"]
 
 
+def _normalize_currency(raw_currency: str) -> str:
+    """Normalize parsed currency tokens into a consistent uppercase code."""
+    lowered = raw_currency.strip().lower().replace(".", "")
+    if lowered == "rs":
+        return "LKR"
+    return lowered.upper()
+
+
 def _normalize_interests(interests: list[str]) -> list[str]:
     """Normalize interests to lowercase unique labels while preserving order."""
     cleaned: list[str] = []
@@ -181,13 +202,20 @@ def _normalize_interests(interests: list[str]) -> list[str]:
     return cleaned or ["general sightseeing"]
 
 
-def _classify_budget_tier(budget: float, days: int) -> Literal["low", "medium", "high"]:
+def _classify_budget_tier(budget: float, days: int, currency: str) -> Literal["low", "medium", "high"]:
     """Classify budget tier using simple heuristic per-day thresholds.
 
     Notes:
         These thresholds are demo heuristics intended for project evaluation and
         should be calibrated per currency or destination in future work.
     """
+    if currency == "LKR":
+        if budget < 50000:
+            return "low"
+        if budget > 100000:
+            return "high"
+        return "medium"
+
     per_day = budget / days
     if per_day < 60:
         return "low"

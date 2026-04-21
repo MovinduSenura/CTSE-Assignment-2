@@ -6,6 +6,36 @@ import re
 from typing import Literal
 
 from pydantic import BaseModel, Field
+from requests import RequestException
+
+from Member_2_Researcher.attraction_tool import resolve_destination
+
+KNOWN_NON_SRI_LANKAN_DESTINATIONS = {
+    "tokyo",
+    "paris",
+    "london",
+    "singapore",
+    "bangkok",
+    "new york",
+    "dubai",
+    "rome",
+    "seoul",
+    "kuala lumpur",
+    "sydney",
+    "melbourne",
+    "delhi",
+    "mumbai",
+    "beijing",
+    "shanghai",
+    "maldives",
+    "india",
+    "japan",
+    "france",
+    "england",
+    "thailand",
+    "uae",
+    "united arab emirates",
+}
 
 
 class PlannerRequestInput(BaseModel):
@@ -152,6 +182,7 @@ def validate_and_structure_trip_request(
     normalized_destination = destination.strip()
     if not normalized_destination:
         raise ValueError("Destination is required.")
+    _ensure_sri_lanka_destination(normalized_destination)
     if budget <= 0:
         raise ValueError("Budget must be greater than zero.")
     if days <= 0:
@@ -175,6 +206,29 @@ def validate_and_structure_trip_request(
         warnings=warnings,
         planning_constraints=planning_constraints,
     )
+
+
+def _ensure_sri_lanka_destination(destination: str) -> None:
+    """Reject destinations outside Sri Lanka before downstream planning begins.
+
+    The Planner is intentionally scoped to Sri Lankan travel planning. This
+    check reuses the shared destination resolver so unsupported locations are
+    blocked early and the rest of the workflow receives only local destinations.
+    """
+    lowered_destination = destination.strip().lower()
+    if lowered_destination in KNOWN_NON_SRI_LANKAN_DESTINATIONS:
+        raise ValueError(
+            f"Destination '{destination}' is outside Sri Lanka. This planner currently supports Sri Lanka destinations only."
+        )
+
+    try:
+        resolve_destination(destination, timeout=10)
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
+    except RequestException as exc:
+        raise ValueError(
+            "Could not verify that the destination is in Sri Lanka. Please try again."
+        ) from exc
 
 
 def _split_interests(interests_text: str) -> list[str]:
@@ -210,7 +264,7 @@ def _classify_budget_tier(budget: float, days: int, currency: str) -> Literal["l
         should be calibrated per currency or destination in future work.
     """
     if currency == "LKR":
-        if budget < 50000:
+        if budget < 10000:
             return "low"
         if budget > 100000:
             return "high"

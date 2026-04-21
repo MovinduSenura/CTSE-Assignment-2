@@ -17,8 +17,27 @@ def test_parse_trip_request_from_natural_language() -> None:
         "destination": "Kandy",
         "days": 2,
         "budget": 30000.0,
+        "currency": "LKR",
         "interests": ["culture", "food"],
     }
+
+
+def test_parse_trip_request_extracts_lkr_currency() -> None:
+    result = parse_trip_request(
+        "Plan a 2-day trip to Kandy under LKR 30000 for culture and food"
+    )
+    assert result.destination == "Kandy"
+    assert result.days == 2
+    assert result.budget == 30000.0
+    assert result.currency == "LKR"
+    assert result.interests == ["culture", "food"]
+
+
+def test_parse_trip_request_extracts_rs_currency() -> None:
+    result = parse_trip_request(
+        "Plan a 1-day trip to Galle under Rs 10000 for beach and food"
+    )
+    assert result.currency == "LKR"
 
 
 def test_planner_validation_normalizes_and_deduplicates_interests() -> None:
@@ -27,6 +46,7 @@ def test_planner_validation_normalizes_and_deduplicates_interests() -> None:
         budget=900.0,
         days=3,
         interests=["Food", "anime", "food", " culture "],
+        currency="USD",
     )
     assert result.normalized_destination == "Tokyo"
     assert result.normalized_interests == ["food", "anime", "culture"]
@@ -121,6 +141,7 @@ def test_planner_validation_flags_expensive_city_and_packed_request() -> None:
         budget=240.0,
         days=3,
         interests=["culture", "food", "anime", "shopping", "nightlife", "history", "gaming"],
+        currency="USD",
     )
     assert result.budget_tier == "medium"
     assert result.daily_trip_pacing == "packed"
@@ -134,9 +155,11 @@ def test_planner_validation_result_shape_is_report_ready() -> None:
         budget=300.0,
         days=2,
         interests=["food"],
+        currency="USD",
     )
     assert set(result.model_dump().keys()) == {
         "normalized_destination",
+        "currency",
         "normalized_interests",
         "budget_tier",
         "daily_trip_pacing",
@@ -175,7 +198,35 @@ def test_planner_validation_result_uses_strict_model_dump() -> None:
         budget=12000.0,
         days=2,
         interests=["culture", "food"],
+        currency="USD",
     )
     dumped = result.model_dump()
     assert dumped["normalized_destination"] == "Kandy"
     assert dumped["budget_tier"] in {"low", "medium", "high"}
+
+
+def test_planner_validation_uses_lkr_thresholds() -> None:
+    low_result = validate_and_structure_trip_request(
+        destination="Kandy",
+        budget=30000.0,
+        days=2,
+        interests=["culture", "food"],
+        currency="LKR",
+    )
+    medium_result = validate_and_structure_trip_request(
+        destination="Kandy",
+        budget=75000.0,
+        days=2,
+        interests=["culture", "food"],
+        currency="LKR",
+    )
+    high_result = validate_and_structure_trip_request(
+        destination="Kandy",
+        budget=150000.0,
+        days=2,
+        interests=["culture", "food"],
+        currency="LKR",
+    )
+    assert low_result.budget_tier == "low"
+    assert medium_result.budget_tier == "medium"
+    assert high_result.budget_tier == "high"

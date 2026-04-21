@@ -42,10 +42,16 @@ Return:
 - approved
 - warnings
 - final_itinerary
+
+Rules:
+- final_itinerary must include a short overview
+- final_itinerary must include a day-by-day plan using labels like 'Day 1', 'Day 2'
+- final_itinerary must include a budget summary
+- do not return only a generic approval paragraph
 """
     result = llm.with_structured_output(ReviewerOutput).invoke(prompt)
     result_data = result.model_dump()
-    if len(result_data["final_itinerary"].strip()) < 120:
+    if not _looks_like_real_itinerary(result_data["final_itinerary"], state["days"]):
         result_data["final_itinerary"] = format_final_itinerary(
             destination=state["destination"],
             days=state["days"],
@@ -56,3 +62,14 @@ Return:
         )
     logger.info("REVIEWER | input=%s | warnings=%s | output=%s", state, warnings, result_data)
     return {"reviewer_output": result_data}
+
+
+def _looks_like_real_itinerary(final_itinerary: str, days: int) -> bool:
+    """Check whether the reviewer output contains a genuine day-by-day itinerary."""
+    text = final_itinerary.strip()
+    if len(text) < 120:
+        return False
+    if "Budget Summary" not in text:
+        return False
+    day_markers = sum(1 for day in range(1, days + 1) if f"Day {day}" in text)
+    return day_markers >= min(days, 2)

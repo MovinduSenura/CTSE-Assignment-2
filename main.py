@@ -71,7 +71,7 @@ def run_system(
     budget: float,
     days: int,
     interests: list[str],
-    currency: str = "USD",
+    currency: str = "LKR",
     llm: ChatOllama | None = None,
 ) -> TravelPlannerState:
     """Run the whole multi-agent travel planning system."""
@@ -99,7 +99,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--destination", help="Trip destination, for example 'Tokyo'")
     parser.add_argument("--budget", type=float, help="Maximum trip budget")
     parser.add_argument("--days", type=int, help="Number of trip days")
-    parser.add_argument("--currency", default="USD", help="Budget currency")
+    parser.add_argument("--currency", default="LKR", help="Budget currency")
     parser.add_argument("--interests", nargs="+", help="Interests, for example culture food anime")
     parser.add_argument("--show-planner-details", action="store_true", help="Print planner output for demos and evaluation")
     return parser.parse_args()
@@ -108,7 +108,10 @@ def parse_args() -> argparse.Namespace:
 def resolve_user_input(args: argparse.Namespace) -> dict:
     """Resolve CLI arguments into a single structured input object."""
     if args.request:
-        return parse_trip_request(args.request).model_dump()
+        parsed_request = parse_trip_request(args.request).model_dump()
+        if "currency" not in parsed_request or not parsed_request["currency"]:
+            parsed_request["currency"] = args.currency
+        return parsed_request
 
     missing = [
         name
@@ -127,6 +130,7 @@ def resolve_user_input(args: argparse.Namespace) -> dict:
         "destination": args.destination,
         "budget": args.budget,
         "days": args.days,
+        "currency": args.currency,
         "interests": args.interests,
     }
 
@@ -144,7 +148,7 @@ def main() -> None:
         budget=structured_input["budget"],
         days=structured_input["days"],
         interests=structured_input["interests"],
-        currency=args.currency,
+        currency=structured_input.get("currency", args.currency),
     )
     if args.show_planner_details:
         print("\n=== PLANNER OUTPUT ===\n")

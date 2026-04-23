@@ -20,7 +20,10 @@ def _allow_sri_lanka_destination(destination: str, timeout: int = 10) -> Destina
         alphabet=st.characters(whitelist_categories=("Lu", "Ll", "Zs")),
         min_size=1,
         max_size=20,
-    ).map(str.strip).filter(bool),
+    )
+    .map(str.strip)
+    .filter(bool)
+    .filter(lambda destination: destination.lower() not in planner_validation_tool.KNOWN_NON_SRI_LANKAN_DESTINATIONS),
     budget=st.floats(min_value=1, max_value=100000, allow_nan=False, allow_infinity=False),
     days=st.integers(min_value=1, max_value=14),
     interests=st.lists(

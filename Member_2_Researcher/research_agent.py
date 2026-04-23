@@ -18,6 +18,8 @@ class AttractionRecommendation(BaseModel):
     estimated_time_hours: float = Field(gt=0)
     interest_match: str
     source: str
+    distance_meters: int | None = None
+    relevance_score: float = Field(default=0.0, ge=0)
 
 
 class ResearchOutput(BaseModel):

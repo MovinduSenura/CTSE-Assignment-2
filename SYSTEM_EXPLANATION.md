@@ -253,7 +253,11 @@ For each nearby place, it:
 - fetches a Wikipedia summary
 - estimates visit time
 - matches the place to one of the user interests
+- stores approximate distance from the destination
+- calculates a relevance score
 - stores the source URL
+
+If the first nearby search does not return enough useful attractions, the tool expands the search radius and merges unique results. This improves coverage for destinations where Wikipedia has fewer close-range geosearch entries.
 
 ### Attraction filtering
 
@@ -264,8 +268,24 @@ The system excludes generic places like:
 - banks
 - hospitals
 - schools
+- roads
+- districts
+- companies
+- transport junctions
 
 This reduces noisy travel results.
+
+### Attraction ranking
+
+The Researcher now ranks attractions before passing them to the LLM. Ranking considers:
+
+- interest alignment
+- description quality
+- tourist-related keywords
+- distance from the destination
+- coverage across multiple requested interests
+
+This makes the output more accurate because stronger, closer, and more relevant attractions are prioritized instead of relying only on Wikipedia's raw geosearch order. When the user provides multiple interests, the Researcher tries to include the best available match for each interest before filling the remaining slots.
 
 ### Research output
 
@@ -281,6 +301,8 @@ Each attraction contains:
 - estimated visit time
 - interest match
 - source
+- distance in meters when available
+- relevance score
 
 ### Fallback and sanitization
 
@@ -442,6 +464,9 @@ Research tests check:
 - Pydantic model behavior
 - exclusion rules for low-value places
 - coordinate constraints
+- interest matching from title and summary text
+- removal of unsupported LLM-generated attractions
+- fallback to a wider search radius when nearby results are too thin
 
 ### Executor tests
 

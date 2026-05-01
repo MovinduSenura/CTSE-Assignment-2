@@ -20,6 +20,7 @@ def format_final_itinerary(
     days: int,
     user_goal: str,
     attractions: list[dict],
+    budget_output: dict,
     budget_summary: str,
     warnings: list[str],
 ) -> str:
@@ -38,7 +39,19 @@ def format_final_itinerary(
             f"Focus: {attraction['interest_match']}. {attraction['description']}"
         )
 
-    lines.extend(["", f"Budget Summary: {budget_summary}", "Recommended attractions:"])
+    lines.extend(["", f"Budget Summary: {budget_summary}"])
+
+    line_items = budget_output.get("line_items", [])
+    if line_items:
+        lines.append("")
+        lines.append("Budget Breakdown:")
+        for item in line_items:
+            category = item.get("category", "Unknown")
+            amount = item.get("amount", 0)
+            reasoning = item.get("reasoning", "")
+            lines.append(f"- {category}: {budget_output.get('currency', '')} {amount:.2f} ({reasoning})")
+
+    lines.extend(["", "Recommended attractions:"])
     for attraction in attractions[: min(len(attractions), days * 2)]:
         lines.append(f"- {attraction['name']} ({attraction['source']})")
 

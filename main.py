@@ -5,11 +5,16 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from typing import TypedDict
 from uuid import uuid4
+from pathlib import Path
 
-from langchain_ollama import ChatOllama
+try:
+    from langchain_ollama import ChatOllama
+except Exception:  # pragma: no cover - optional dependency
+    ChatOllama = None
 from langgraph.graph import END, START, StateGraph
 
 from Member_1_Planner.validation_tool import parse_trip_request
@@ -33,6 +38,9 @@ class TravelPlannerState(TypedDict, total=False):
     reviewer_output: dict
 
 
+DEFAULT_OLLAMA_MODEL = "qwen2.5:1.5b"
+
+
 def configure_logging() -> logging.Logger:
     """Configure application logging."""
     logger = logging.getLogger("ai_travel_planner")
@@ -40,15 +48,20 @@ def configure_logging() -> logging.Logger:
         return logger
 
     logger.setLevel(logging.INFO)
-    handler = logging.FileHandler("logs/execution.log", encoding="utf-8")
+    # Ensure the logs directory exists before creating the file handler
+    Path("logs").mkdir(parents=True, exist_ok=True)
+    handler = logging.FileHandler(Path("logs") / "execution.log", encoding="utf-8")
     handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
     logger.addHandler(handler)
     return logger
 
 
-def get_llm(model_name: str = "llama3:latest") -> ChatOllama:
+def get_llm(model_name: str | None = None) -> ChatOllama:
     """Create the Ollama chat model used by all agents."""
-    return ChatOllama(model=model_name, temperature=0.2)
+    if ChatOllama is None:
+        return None
+    resolved_model = model_name or os.getenv("OLLAMA_MODEL") or DEFAULT_OLLAMA_MODEL
+    return ChatOllama(model=resolved_model, temperature=0.2)
 
 
 def build_graph(llm: ChatOllama, logger: logging.Logger):
@@ -101,6 +114,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--days", type=int, help="Number of trip days")
     parser.add_argument("--currency", default="LKR", help="Budget currency")
     parser.add_argument("--interests", nargs="+", help="Interests, for example culture food anime")
+    parser.add_argument("--model", help=f"Ollama model name to use, defaults to {DEFAULT_OLLAMA_MODEL}")
     parser.add_argument("--show-planner-details", action="store_true", help="Print planner output for demos and evaluation")
     return parser.parse_args()
 
@@ -144,12 +158,14 @@ def main() -> None:
     print("\n=== STRUCTURED INPUT ===\n")
     print(json.dumps(structured_input, indent=4))
     try:
+        llm = get_llm(args.model)
         final_state = run_system(
             destination=structured_input["destination"],
             budget=structured_input["budget"],
             days=structured_input["days"],
             interests=structured_input["interests"],
             currency=structured_input.get("currency", args.currency),
+            llm=llm,
         )
     except ValueError as exc:
         print("\n=== ERROR ===\n")

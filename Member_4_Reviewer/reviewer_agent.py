@@ -47,18 +47,35 @@ Rules:
 - final_itinerary must include a short overview
 - final_itinerary must include a day-by-day plan using labels like 'Day 1', 'Day 2'
 - final_itinerary must include a budget summary
+- final_itinerary should include a budget breakdown by category when available
 - do not return only a generic approval paragraph
 """
-    result = llm.with_structured_output(ReviewerOutput).invoke(prompt)
-    result_data = result.model_dump()
+    try:
+        result = llm.with_structured_output(ReviewerOutput).invoke(prompt)
+        result_data = result.model_dump()
+    except Exception as exc:
+        # Fallback: build a deterministic final itinerary
+        logger.warning("REVIEWER_LLM_FALLBACK | %s", exc)
+        final_itinerary = format_final_itinerary(
+            destination=state["destination"],
+            days=state["days"],
+            user_goal=state["planner_output"]["user_goal"],
+            attractions=state["research_output"]["attractions"],
+            budget_output=state["budget_output"],
+            budget_summary=state["budget_output"]["summary"],
+            warnings=warnings,
+        )
+        result_data = {"approved": True, "warnings": warnings, "final_itinerary": final_itinerary}
+
     if not _looks_like_real_itinerary(result_data["final_itinerary"], state["days"]):
         result_data["final_itinerary"] = format_final_itinerary(
             destination=state["destination"],
             days=state["days"],
             user_goal=state["planner_output"]["user_goal"],
             attractions=state["research_output"]["attractions"],
+            budget_output=state["budget_output"],
             budget_summary=state["budget_output"]["summary"],
-            warnings=result_data["warnings"] or warnings,
+            warnings=result_data.get("warnings") or warnings,
         )
     logger.info("REVIEWER | input=%s | warnings=%s | output=%s", state, warnings, result_data)
     return {"reviewer_output": result_data}

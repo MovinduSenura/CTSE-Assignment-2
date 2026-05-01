@@ -332,19 +332,19 @@ The Executor Agent turns the researched plan into a cost estimate.
 
 The real cost calculation happens in `estimate_trip_budget()`.
 
-It loads country profiles from `destinations.json`, such as:
+It loads live Sri Lanka market references from public sources, such as:
+
+- Numbeo city or country cost-of-living pages
+- public exchange-rate APIs for currency conversion
+
+The tool extracts values for:
 
 - hotel per night
 - food per day
 - transport per day
 - attraction cost per place
 
-For Sri Lanka, the current profile is:
-
-- hotel per night: `55.0`
-- food per day: `14.0`
-- transport per day: `8.0`
-- attraction per place: `10.0`
+For Sri Lanka, the values are derived from the current public data returned by those pages and converted into the requested currency when needed.
 
 ### Budget calculation logic
 
@@ -365,7 +365,7 @@ It then returns:
 
 ### Weak point
 
-Unlike the Planner and Researcher, the Executor currently has **no fallback handling** around the LLM call. If the LLM rewrite step fails, this stage may stop the workflow.
+Unlike the Planner and Researcher, the Executor originally had **no fallback handling** around the LLM call. That was fixed so the deterministic tool output is returned if the LLM rewrite step fails.
 
 That is an important design limitation in the current implementation.
 

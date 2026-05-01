@@ -39,8 +39,17 @@ def test_formatter_tool_builds_final_itinerary() -> None:
                 "source": "https://example.com",
             }
         ],
+        budget_output={
+            "currency": "USD",
+            "line_items": [
+                {"category": "Accommodation", "amount": 100.0, "reasoning": "Hotel night"},
+                {"category": "Food", "amount": 40.0, "reasoning": "Meals"},
+            ],
+        },
         budget_summary="Estimated USD 300.00 total.",
         warnings=[],
     )
     assert "Tokyo 2-Day Travel Plan" in itinerary
     assert "Budget Summary" in itinerary
+    assert "Budget Breakdown" in itinerary
+    assert "Accommodation" in itinerary
